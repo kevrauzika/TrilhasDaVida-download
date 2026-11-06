@@ -24,9 +24,10 @@ irm https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/des
 
 ## Jogar com amigos (até 4)
 
-1. Quem hospeda: menu → **Jogar com amigos** → **Hospedar sala**. Na primeira vez, o Windows pergunta sobre o firewall: clique em **Permitir acesso**.
-2. O código da sala aparece na pausa (**Esc**). Mande para os amigos.
-3. Quem entra: menu → **Jogar com amigos** → digite o código → **Entrar na sala**.
+1. Entre numa sala: menu → **Jogar com amigos** → digite o código → **Entrar na sala**. (Sem servidor, alguém clica em **Hospedar sala**; na primeira vez, o Windows pergunta sobre o firewall: clique em **Permitir acesso**.)
+2. Na pausa (**Esc**) aparece o código da sala e o botão **Copiar convite**: ele copia uma mensagem pronta com o comando de instalar, o código e como entrar. É só colar no chat.
+
+![Copiar convite na pausa](telas/convite.png)
 
 Pela internet, o jeito mais fácil é todos usarem o [Tailscale](https://tailscale.com/download) na mesma rede e usar o código "Tailscale". No mesmo Wi-Fi, use o código "Mesma rede".
 
@@ -38,7 +39,15 @@ Numa VPS Debian/Ubuntu (x86_64), rode:
 curl -fsSL https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/instalar-servidor.sh | sudo bash
 ```
 
-A sala fica sempre aberta na porta **UDP 7777** (libere-a também no firewall do painel do provedor) e o progresso do grupo fica salvo na VPS. No jogo, todos usam **Jogar com amigos** → digitam o IP da VPS → **Entrar na sala**. Usa ~90 MB de RAM.
+A sala fica sempre aberta na porta **UDP 7777** (libere-a também no firewall do painel do provedor), o progresso do grupo fica salvo na VPS e o script mostra o **código da sala**. Cada sala usa ~90 MB de RAM.
+
+Outra sala para outro grupo (progresso separado), na porta 7778:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/instalar-servidor.sh | sudo bash -s -- 7778
+```
+
+Rodar o comando de novo atualiza o servidor e reinicia todas as salas. Apagar uma sala: `systemctl disable --now trilhas@7778`.
 
 ## Controles
 
