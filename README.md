@@ -30,6 +30,16 @@ irm https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/des
 
 Pela internet, o jeito mais fácil é todos usarem o [Tailscale](https://tailscale.com/download) na mesma rede e usar o código "Tailscale". No mesmo Wi-Fi, use o código "Mesma rede".
 
+### Servidor dedicado (VPS)
+
+Numa VPS Debian/Ubuntu (x86_64), rode:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/instalar-servidor.sh | sudo bash
+```
+
+A sala fica sempre aberta na porta **UDP 7777** (libere-a também no firewall do painel do provedor) e o progresso do grupo fica salvo na VPS. No jogo, todos usam **Jogar com amigos** → digitam o IP da VPS → **Entrar na sala**. Usa ~90 MB de RAM.
+
 ## Controles
 
 WASD ou setas para andar · Shift devagar · E interagir · C caderno · M mapa · F lanterna · Esc pausa
