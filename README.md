@@ -24,14 +24,17 @@ irm https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/des
 
 ## Jogar com amigos (até 4)
 
-1. Entre numa sala: menu → **Jogar com amigos** → digite o código → **Entrar na sala**. (Sem servidor, alguém clica em **Hospedar sala**; na primeira vez, o Windows pergunta sobre o firewall: clique em **Permitir acesso**.)
-2. Na pausa (**Esc**) aparece o código da sala e o botão **Copiar convite**: ele copia uma mensagem pronta com o comando de instalar, o código e como entrar. É só colar no chat.
+1. Menu → **Jogar com amigos** → **Salas no servidor**.
+2. Clique numa sala para entrar, ou dê um nome e clique em **Criar e entrar**. Cada sala tem o próprio progresso, salvo no servidor. As salas que você criou aparecem como "(sua)" e têm o botão **Excluir**.
+3. Dentro da sala, **Esc** mostra o código da sala e o botão **Copiar convite**: uma mensagem pronta com o comando de instalar, o código e como entrar. É só colar no chat. Quem recebe entra por **Jogar com amigos** → digite o código → **Entrar na sala**.
+
+![Salas no servidor](telas/salas.png)
 
 ![Copiar convite na pausa](telas/convite.png)
 
-Pela internet, o jeito mais fácil é todos usarem o [Tailscale](https://tailscale.com/download) na mesma rede e usar o código "Tailscale". No mesmo Wi-Fi, use o código "Mesma rede".
+Sem servidor, alguém pode clicar em **Hospedar no meu PC** (na primeira vez, o Windows pergunta sobre o firewall: clique em **Permitir acesso**). Pela internet, o jeito mais fácil é todos usarem o [Tailscale](https://tailscale.com/download) e o código "Tailscale"; no mesmo Wi-Fi, o código "Mesma rede".
 
-### Servidor dedicado (VPS)
+### Servidor do grupo (VPS)
 
 Numa VPS Debian/Ubuntu (x86_64), rode:
 
@@ -39,15 +42,7 @@ Numa VPS Debian/Ubuntu (x86_64), rode:
 curl -fsSL https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/instalar-servidor.sh | sudo bash
 ```
 
-A sala fica sempre aberta na porta **UDP 7777** (libere-a também no firewall do painel do provedor), o progresso do grupo fica salvo na VPS e o script mostra o **código da sala**. Cada sala usa ~90 MB de RAM.
-
-Outra sala para outro grupo (progresso separado), na porta 7778:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/instalar-servidor.sh | sudo bash -s -- 7778
-```
-
-Rodar o comando de novo atualiza o servidor e reinicia todas as salas. Apagar uma sala: `systemctl disable --now trilhas@7778`.
+Isso instala o **salão** (porta UDP 7777), que cria e apaga as salas pedidas pelo jogo (portas UDP 7801–7808). Libere essas portas também no firewall do painel do provedor. Cada sala usa ~90 MB de RAM; o limite é 8 salas, 2 por pessoa. Rodar o comando de novo atualiza o servidor sem perder salas nem progresso. Logs: `journalctl -u trilhas -f`.
 
 ## Controles
 

@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# Instala/atualiza o servidor dedicado do Trilhas da Vida numa VPS Debian/Ubuntu e cria uma sala.
+# Instala/atualiza o servidor do Trilhas da Vida numa VPS Debian/Ubuntu.
 #   curl -fsSL https://raw.githubusercontent.com/kevrauzika/TrilhasDaVida-download/HEAD/instalar-servidor.sh | sudo bash
-# Outra sala (outro grupo, progresso separado): passe a porta.
-#   curl -fsSL .../instalar-servidor.sh | sudo bash -s -- 7778
-# Cada sala é o serviço trilhas@<porta>. Rodar de novo atualiza o servidor e reinicia todas as salas.
-#   systemctl status trilhas@7777 · journalctl -u trilhas@7777 -f · systemctl disable --now trilhas@7778 (apaga a sala)
-# Progresso: /var/lib/trilhas/.local/share/godot/app_userdata/Trilhas da Vida/servidor[_<porta>].json
+# Roda o "salão" (serviço trilhas, UDP 7777): pelo jogo os jogadores criam, veem e excluem salas
+# (Jogar com amigos > Salas no servidor). Cada sala é um processo filho do salão, numa porta UDP 7801-7808.
+# Rodar de novo atualiza o servidor e reinicia o salão e as salas.
+#   systemctl status trilhas · journalctl -u trilhas -f
+# Salas e progresso: /var/lib/trilhas/.local/share/godot/app_userdata/Trilhas da Vida/ (salas.json, servidor_<porta>.json)
+# Saves da versão antiga (servidor.json, servidor_<porta>.json) viram salas sem dono na primeira vez que o salão sobe.
 set -euo pipefail
 
 URL="${TRILHAS_SERVIDOR_URL:-https://github.com/kevrauzika/TrilhasDaVida-download/releases/latest/download/TrilhasDaVida-servidor-linux.zip}"
 PASTA=/opt/trilhas
-PORTA="${1:-7777}"
+DADOS="/var/lib/trilhas/.local/share/godot/app_userdata/Trilhas da Vida"
+PORTA=7777         # Salao.PORTA
+SALAS=7801:7808    # Salao.PORTA + DESLOCAMENTO_SALAS, MAX_SALAS salas
 
 [ "$(id -u)" -eq 0 ] || { echo "Rode como root (sudo)."; exit 1; }
 [ "$(uname -m)" = "x86_64" ] || { echo "Esta VPS é $(uname -m); o servidor é só para x86_64."; exit 1; }
-[[ "$PORTA" =~ ^[0-9]+$ ]] && [ "$PORTA" -ge 1024 ] && [ "$PORTA" -le 65535 ] || { echo "Porta inválida: $PORTA (use 1024-65535)"; exit 1; }
 
 # Mesmo código de sala do jogo (Rede.codificar): IPv4 + porta em 10 caracteres base32 de Crockford.
 codigo() {
@@ -25,68 +27,76 @@ codigo() {
 	echo "${s:0:5}-${s:5}"
 }
 
-echo "[1/4] Baixando o servidor"
+echo "[1/5] Baixando o servidor"
 command -v unzip >/dev/null && command -v curl >/dev/null || { apt-get update -qq && apt-get install -y -qq unzip curl; }
 TMP=$(mktemp -d)
 trap 'rm -r "$TMP"' EXIT
 curl -fsSL "$URL" -o "$TMP/servidor.zip"
 unzip -q -o "$TMP/servidor.zip" -d "$TMP"
 
-echo "[2/4] Instalando em $PASTA"
+echo "[2/5] Parando as versões antigas (salas fixas trilhas@<porta> e sala única)"
+for u in /etc/systemd/system/multi-user.target.wants/trilhas@*.service; do
+	[ -L "$u" ] || [ -e "$u" ] || continue
+	systemctl disable --now "$(basename "$u")" >/dev/null 2>&1 || true
+done
+systemctl stop 'trilhas@*' >/dev/null 2>&1 || true
+systemctl disable --now trilhas >/dev/null 2>&1 || true
+rm -f /etc/systemd/system/trilhas@.service /etc/systemd/system/multi-user.target.wants/trilhas@*.service
+systemctl daemon-reload
+
+echo "[3/5] Instalando em $PASTA"
 id trilhas >/dev/null 2>&1 || useradd --system --home-dir /var/lib/trilhas --create-home --shell /usr/sbin/nologin trilhas
 mkdir -p "$PASTA"
 install -m 755 "$TMP/TrilhasDaVida.x86_64" "$PASTA/TrilhasDaVida.x86_64"
 
-echo "[3/4] Criando a sala da porta $PORTA (liga sozinha com a VPS)"
-cat > /etc/systemd/system/trilhas@.service <<EOF
+echo "[4/5] Criando o serviço trilhas (salão na porta $PORTA, liga sozinho com a VPS)"
+cat > /etc/systemd/system/trilhas.service <<EOF
 [Unit]
-Description=Trilhas da Vida - sala coop na porta %i
+Description=Trilhas da Vida - salão de salas coop (UDP $PORTA, salas $SALAS)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 User=trilhas
 WorkingDirectory=/var/lib/trilhas
-ExecStart=$PASTA/TrilhasDaVida.x86_64 --headless -- --servidor --porta=%i
+ExecStart=$PASTA/TrilhasDaVida.x86_64 --headless -- --salao
 Restart=always
 RestartSec=3
-MemoryMax=300M
+# salão + até 8 salas de ~90 MB cada; o KillMode padrão (control-group) encerra as salas junto com o salão
+MemoryMax=1G
 
 [Install]
 WantedBy=multi-user.target
 EOF
-# versão antiga (uma sala só): vira trilhas@7777, com o mesmo progresso salvo
-if [ -f /etc/systemd/system/trilhas.service ]; then
-	systemctl disable --now trilhas >/dev/null 2>&1 || true
-	rm -f /etc/systemd/system/trilhas.service
-	systemctl daemon-reload
-	systemctl enable --now trilhas@7777 >/dev/null 2>&1
-fi
 systemctl daemon-reload
-systemctl enable trilhas@"$PORTA" >/dev/null 2>&1
-SALAS=$(systemctl list-units --type=service --all --no-legend --plain 'trilhas@*' | awk '{print $1}' | grep -oE '^trilhas@[0-9]+' | sort -u)
-for s in $SALAS trilhas@"$PORTA"; do systemctl restart "$s"; done
+systemctl enable trilhas >/dev/null 2>&1
+systemctl restart trilhas
 
-echo "[4/4] Liberando a porta UDP $PORTA"
+echo "[5/5] Liberando UDP $PORTA e $SALAS"
 if command -v ufw >/dev/null && ufw status | grep -q active; then
 	ufw allow "$PORTA"/udp >/dev/null
-	echo "  ufw: porta liberada"
+	ufw allow "$SALAS"/udp >/dev/null
+	echo "  ufw: portas liberadas"
 else
 	echo "  (sem ufw ativo; nada a fazer aqui)"
 fi
 
-sleep 2
-if ! systemctl is-active --quiet trilhas@"$PORTA"; then
-	echo "A sala não subiu. Veja: journalctl -u trilhas@$PORTA -n 30"
+sleep 4
+if ! systemctl is-active --quiet trilhas; then
+	echo "O salão não subiu. Veja: journalctl -u trilhas -n 30"
 	exit 1
 fi
 IP=$(curl -fsS4 https://api.ipify.org || true)
 echo
-echo "Pronto! Salas nesta VPS:"
-for s in $(systemctl list-units --type=service --state=active --no-legend --plain 'trilhas@*' | awk '{print $1}' | grep -oE '[0-9]+' | sort -un); do
-	if [[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "  porta $s  ->  código $(codigo "$IP" "$s")"; else echo "  porta $s"; fi
-done
+echo "Pronto! O salão está no ar."
+PORTAS=$(grep -oE '"porta": *[0-9]+' "$DADOS/salas.json" 2>/dev/null | grep -oE '[0-9]+' | sort -un || true)
+if [ -n "$PORTAS" ]; then
+	echo "Salas existentes:"
+	for s in $PORTAS; do
+		if [[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "  porta $s  ->  código $(codigo "$IP" "$s")"; else echo "  porta $s"; fi
+	done
+fi
 echo
-echo "No jogo: Jogar com amigos > digite o código > Entrar na sala."
+echo "No jogo: Jogar com amigos > Salas no servidor"
 echo "Dentro da sala, Esc > Copiar convite gera a mensagem pronta para mandar aos amigos."
-echo "Se o provedor da VPS tiver firewall no painel, libere a porta UDP $PORTA lá também."
+echo "Se o provedor da VPS tiver firewall no painel, libere lá também UDP $PORTA e 7801-7808."
